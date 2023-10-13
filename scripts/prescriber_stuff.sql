@@ -1,11 +1,12 @@
 --1. a. Which prescriber had the highest total number of claims (totaled over all drugs)? Report the npi and the total number of claims.
 SELECT 
 	x.npi,
-	SUM(total_claim_count) as claim_count
+	SUM(total_claim_count) as claim_count,
+	nppes_provider_last_org_name as last_name
 FROM prescription AS p
 INNER JOIN prescriber AS x
 ON p.npi=x.npi
-GROUP BY x.npi
+GROUP BY x.npi, last_name
 ORDER BY claim_count DESC
 LIMIT 1;
 
@@ -16,20 +17,23 @@ SELECT
 	nppes_provider_first_name AS first_name,
 	nppes_provider_last_org_name AS last_name,
 	specialty_description AS specialty,
-	total_claim_count AS claim_count
+	SUM(total_claim_count) AS claim_count
 FROM prescriber AS p
 INNER JOIN prescription AS x
 ON p.npi=x.npi
-ORDER BY claim_count DESC;
+GROUP BY first_name, last_name, specialty
+ORDER BY claim_count DESC
+LIMIT 1;
 
 --2. a. Which specialty had the most total number of claims (totaled over all drugs)?
 
 SELECT
 	specialty_description AS specialty,
-	total_claim_count AS claim_count
+	SUM(total_claim_count) AS claim_count
 FROM prescriber AS p
 INNER JOIN prescription AS x
 ON p.npi=x.npi
+GROUP BY specialty
 ORDER BY claim_count DESC;
 
 
@@ -78,21 +82,20 @@ ORDER BY SUM(total_drug_cost) DESC
 --Insulin has the has the highest total drug cost
 
 --b. Which drug (generic_name) has the hightest total cost per day? **Bonus: Round your cost per day column to 2 decimal places. Google ROUND to see how this works.**
---YOU NEED HELP WITH THIS ONE!!!
 SELECT
 	generic_name,
-	CAST(SUM(total_drug_cost)/total_day_supply as money) AS highest
+	CAST(SUM(total_drug_cost)/SUM(total_day_supply) AS money) AS highest
 FROM prescription AS x
 LEFT JOIN drug AS d
 ON x.drug_name=d.drug_name
 GROUP BY generic_name
-ORDER BY highest DESC
+ORDER BY highest DESC;
 
 
 
-select *
-FROM prescription
-limit 10
+--select *
+--FROM prescription
+--limit 10
 
 --4. a. For each drug in the drug table, return the drug name and then a column named 'drug_type' which says 'opioid' for drugs which have opioid_drug_flag = 'Y', says 'antibiotic' for those drugs which have antibiotic_drug_flag = 'Y', and says 'neither' for all other drugs.
 
@@ -127,15 +130,16 @@ ORDER BY tot DESC
 
 SELECT*
 FROM cbsa AS c
-WHERE cbsaname LIKE '%TN'
+WHERE cbsaname LIKE '%TN';
 
 --33 in TN
 
 --b. Which cbsa has the largest combined population? Which has the smallest? Report the CBSA name and total population.
+
 WITH pop AS
-	(SELECT *
+	(SELECT *	
 	FROM population)
-SELECT
+SELECT		
 	cbsaname,
 	SUM(pop.population)
 FROM cbsa AS c
@@ -144,7 +148,28 @@ ON pop.fipscounty= c.fipscounty
 GROUP BY cbsaname
 ORDER BY SUM(pop.population) DESC;
 
+--Nasville-Davidson-Murfreesboro-Franklin has the highest population with 1,830,410, while Morristown has the smallest with 116,352
+
+/*SELECT *
+FROM fips_county AS f
+FULL JOIN population AS p
+ON f.county=p.fipscounty
+WHERE f.state = 'TN'*/
+
 --c. What is the largest (in terms of population) county which is not included in a CBSA? Report the county name and population.
+WITH big AS 
+	(SELECT
+	MAX(population) AS biggest,
+	 fipscounty
+	FROM population
+	GROUP BY fipscounty
+	ORDER BY biggest DESC)
+	
+SELECT 
+	county
+FROM fips_county AS f
+LEFT JOIN big
+ON f.fipscounty = big.fipscounty
 
 --6. a. Find all rows in the prescription table where total_claims is at least 3000. Report the drug_name and the total_claim_count.
 
