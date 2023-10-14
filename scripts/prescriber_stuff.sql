@@ -55,19 +55,55 @@ ORDER BY claim_count DESC;
 
 --c. **Challenge Question:** Are there any specialties that appear in the prescriber table that have no associated prescriptions in the prescription table?
 
-/*SELECT
+SELECT
+	specialty_description,
+	total_claim_count
+FROM prescriber AS scrib
+FULL JOIN prescription AS scrip
+ON scrib.npi=scrip.npi
+WHERE total_claim_count IS NULL
+GROUP BY specialty_description, total_claim_count
+
+
+--d. **Difficult Bonus:** *Do not attempt until you have solved all other problems!* For each specialty, report the percentage of total claims by that specialty which are for opioids. Which specialties have a high percentage of opioids?
+--HALP!!!
+
+SELECT
 	p.specialty_description AS specialty,
-	COUNT(x.total_claim_count) AS claim_count
-	FROM prescriber AS p
-LEFT JOIN prescription AS x
+	COUNT(x.total_claim_count) AS claim_count,
+	ROUND(COUNT(x.total_claim_count)/SUM(x.total_claim_count)*100,1) AS percent
+FROM prescriber AS p
+INNER JOIN prescription AS x
 	ON p.npi=x.npi
 LEFT JOIN drug AS d
 	ON x.drug_name=d.drug_name
 WHERE opioid_drug_flag = 'Y'
 GROUP BY specialty
-ORDER BY claim_count DESC*/
+ORDER BY percent DESC;
 
---d. **Difficult Bonus:** *Do not attempt until you have solved all other problems!* For each specialty, report the percentage of total claims by that specialty which are for opioids. Which specialties have a high percentage of opioids?
+SELECT
+	npi,
+	COUNT(total_claim_count) AS claim_count,
+	ROUND(total_claim_count*100/SUM(total_claim_count),1) AS percent
+FROM prescription
+WHERE npi=1003013160
+GROUP BY total_claim_count, npi
+
+
+/*SELECT
+	p.specialty_description AS specialty,
+	COUNT(x.total_claim_count) AS claim_count,
+	(COUNT(x.total_claim_count)/SUM(x.total_claim_count)*100) AS percent
+	FROM prescriber AS p
+INNER JOIN prescription AS x
+	ON p.npi=x.npi
+LEFT JOIN drug AS d
+	ON x.drug_name=d.drug_name
+WHERE opioid_drug_flag = 'Y'
+GROUP BY specialty, x.total_claim_count
+ORDER BY percent DESC;*/
+
+--General Acute Care Hospital and Critical Care both have a 9.1 of total opioid claims%
 
 --3. a. Which drug (generic_name) had the highest total drug cost?
 SELECT
@@ -230,41 +266,64 @@ WITH ty AS (SELECT
 				drug_name
 			FROM drug
 		   	WHERE opioid_drug_flag = 'Y')
-
 SELECT 
 	npi,
-	d.drug_name,
-	opioid_drug_flag
+	d.drug_name
 FROM prescriber AS scrib
 CROSS JOIN drug AS d
 INNER JOIN ty
 ON d.drug_name=ty.drug_name
 WHERE scrib.specialty_description = 'Pain Management' AND scrib.nppes_provider_city = 'NASHVILLE'
+GROUP BY npi, d.drug_name
 
 --b. Next, report the number of claims per drug per prescriber. Be sure to include all combinations, whether or not the prescriber had any claims. You should report the npi, the drug name, and the number of claims (total_claim_count).
 
-SELECT
-	npi,
-	drug_name,
-	SUM(total_claim_count)
-FROM prescription
-GROUP BY npi, drug_name
-ORDER BY SUM(total_claim_count) DESC
-
 WITH ty AS (SELECT
-				DISTINCT drug_name
+				drug_name
 			FROM drug
-		   	WHERE opioid_drug_flag = 'Y')
-
+		   	WHERE opioid_drug_flag = 'Y'),
+			
+drug_sum AS(SELECT
+		drug_name,
+		SUM(total_claim_count) AS total
+		FROM prescription
+		GROUP BY drug_name
+		ORDER BY SUM(total_claim_count) DESC)
 SELECT 
 	scrib.npi,
 	d.drug_name,
-	SUM(total_claim_count)
+	total
 FROM prescriber AS scrib
 CROSS JOIN drug AS d
-CROSS JOIN prescription AS scrip
-WHERE scrib.specialty_description = 'Pain Management' AND scrib.nppes_provider_city = 'NASHVILLE' 
-GROUP BY scrib.npi, d.drug_name
-ORDER BY SUM(total_claim_count)
+INNER JOIN ty
+ON d.drug_name=ty.drug_name
+FULL JOIN drug_sum AS dsum
+ON d.drug_name=dsum.drug_name
+WHERE scrib.specialty_description = 'Pain Management' AND scrib.nppes_provider_city = 'NASHVILLE'
+GROUP BY scrib.npi, d.drug_name,dsum.total
 
 --c. Finally, if you have not done so already, fill in any missing values for total_claim_count with 0. Hint - Google the COALESCE function.
+WITH ty AS (SELECT
+				drug_name
+			FROM drug
+		   	WHERE opioid_drug_flag = 'Y'),
+			
+drug_sum AS(SELECT
+		drug_name,
+		SUM(total_claim_count) AS total
+		FROM prescription
+		GROUP BY drug_name
+		ORDER BY SUM(total_claim_count) DESC)
+SELECT 
+	scrib.npi,
+	d.drug_name,
+	COALESCE(total, '0')
+FROM prescriber AS scrib
+CROSS JOIN drug AS d
+INNER JOIN ty
+ON d.drug_name=ty.drug_name
+FULL JOIN drug_sum AS dsum
+ON d.drug_name=dsum.drug_name
+WHERE scrib.specialty_description = 'Pain Management' AND scrib.nppes_provider_city = 'NASHVILLE'
+GROUP BY scrib.npi, d.drug_name,dsum.total
+
