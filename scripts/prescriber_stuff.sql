@@ -40,7 +40,7 @@ ORDER BY claim_count DESC;
 --b. Which specialty had the most total number of claims for opioids?
 SELECT
 	p.specialty_description AS specialty,
-	COUNT(x.total_claim_count) AS claim_count
+	SUM(x.total_claim_count) AS claim_count
 	FROM prescriber AS p
 INNER JOIN prescription AS x
 	ON p.npi=x.npi
@@ -50,19 +50,20 @@ WHERE opioid_drug_flag = 'Y'
 GROUP BY specialty
 ORDER BY claim_count DESC;
 
---Nurse Practitioner has the most claims with 9551 claims for opioids
+--Nurse Practitioner has the most claims with 900845 claims for opioids
 
 
 --c. **Challenge Question:** Are there any specialties that appear in the prescriber table that have no associated prescriptions in the prescription table?
 
 SELECT
 	specialty_description,
-	total_claim_count
+	SUM(total_claim_count)
 FROM prescriber AS scrib
 FULL JOIN prescription AS scrip
 ON scrib.npi=scrip.npi
-WHERE total_claim_count IS NULL
-GROUP BY specialty_description, total_claim_count
+GROUP BY specialty_description
+HAVING SUM(total_claim_count) IS NULL
+ORDER By specialty_description
 
 
 --d. **Difficult Bonus:** *Do not attempt until you have solved all other problems!* For each specialty, report the percentage of total claims by that specialty which are for opioids. Which specialties have a high percentage of opioids?
@@ -71,15 +72,21 @@ GROUP BY specialty_description, total_claim_count
 SELECT
 	p.specialty_description AS specialty,
 	COUNT(x.total_claim_count) AS claim_count,
-	ROUND(COUNT(x.total_claim_count)/SUM(x.total_claim_count)*100,1) AS percent
+	(CASE WHEN d.opioid_drug_flag ='Y' THEN COUNT(opioid_drug_flag)END) AS boogers,
+	(COUNT(x.total_claim_count)*100/(SELECT
+						SUM(total_claim_Count)
+						FROM prescription)) AS percent
 FROM prescriber AS p
 INNER JOIN prescription AS x
 	ON p.npi=x.npi
 LEFT JOIN drug AS d
 	ON x.drug_name=d.drug_name
-WHERE opioid_drug_flag = 'Y'
-GROUP BY specialty
+WHERE opioid_drug_flag='Y'
+GROUP BY specialty, d.opioid_drug_flag
 ORDER BY percent DESC;
+
+
+SELECT 
 
 SELECT
 	npi,
@@ -118,6 +125,7 @@ ORDER BY SUM(total_drug_cost) DESC
 --Insulin has the has the highest total drug cost
 
 --b. Which drug (generic_name) has the hightest total cost per day? **Bonus: Round your cost per day column to 2 decimal places. Google ROUND to see how this works.**
+
 SELECT
 	generic_name,
 	CAST(SUM(total_drug_cost)/SUM(total_day_supply) AS money) AS highest
@@ -211,6 +219,17 @@ WHERE big.fipscounty NOT IN(SELECT fipscounty
 						   FROM cbsa)
 ORDER BY big.biggest DESC
 
+--OR 
+
+SELECT *
+FROM population
+INNER JOIN fips_county AS fc 
+USING(fipscounty)
+LEFT JOIN cbsa USING(figpscounty)
+WHERE cbsa IS NULL
+ORDER BY population DESC
+LIMIT 1;
+
 --Sevier county is the largest
 
 --6. a. Find all rows in the prescription table where total_claims is at least 3000. Report the drug_name and the total_claim_count.
@@ -231,7 +250,7 @@ WITH ty AS (SELECT
 SELECT
 	p.drug_name,
 	total_claim_count,
-	opioid,
+	opioid
 FROM prescription AS p
 INNER JOIN ty
 ON p.drug_name = ty.drug_name
@@ -274,7 +293,7 @@ CROSS JOIN drug AS d
 INNER JOIN ty
 ON d.drug_name=ty.drug_name
 WHERE scrib.specialty_description = 'Pain Management' AND scrib.nppes_provider_city = 'NASHVILLE'
-GROUP BY npi, d.drug_name
+GROUP BY d.drug_name, npi
 
 --b. Next, report the number of claims per drug per prescriber. Be sure to include all combinations, whether or not the prescriber had any claims. You should report the npi, the drug name, and the number of claims (total_claim_count).
 
@@ -302,6 +321,21 @@ ON d.drug_name=dsum.drug_name
 WHERE scrib.specialty_description = 'Pain Management' AND scrib.nppes_provider_city = 'NASHVILLE'
 GROUP BY scrib.npi, d.drug_name,dsum.total
 
+SELECT 
+	p.npi,
+	d.drug_name,
+	SUM(p2.total_claim_count)
+FROM prescriber AS p
+CROSS JOIN drug AS d
+FULL JOIN prescription AS p2
+	USING (drug_name)
+WHERE specialty_description = 'Pain Management'
+	AND nppes_provider_city = 'NASHVILLE'
+	AND opioid_drug_flag = 'Y'
+GROUP BY d.drug_name, p.npi
+ORDER BY SUM(p2.total_claim_count) DESC;
+
+
 --c. Finally, if you have not done so already, fill in any missing values for total_claim_count with 0. Hint - Google the COALESCE function.
 WITH ty AS (SELECT
 				drug_name
@@ -326,4 +360,18 @@ FULL JOIN drug_sum AS dsum
 ON d.drug_name=dsum.drug_name
 WHERE scrib.specialty_description = 'Pain Management' AND scrib.nppes_provider_city = 'NASHVILLE'
 GROUP BY scrib.npi, d.drug_name,dsum.total
+--OR 
+SELECT 
+	p.npi,
+	d.drug_name,
+	COALESCE(SUM(p2.total_claim_count), '0')
+FROM prescriber AS p
+CROSS JOIN drug AS d
+FULL JOIN prescription AS p2
+	USING (drug_name)
+WHERE specialty_description = 'Pain Management'
+	AND nppes_provider_city = 'NASHVILLE'
+	AND opioid_drug_flag = 'Y'
+GROUP BY d.drug_name, p.npi
+ORDER BY SUM(p2.total_claim_count) DESC;
 
